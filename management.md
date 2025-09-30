@@ -1,0 +1,74 @@
+"""
+before the codes, please manage the project
+e.g. 
+---CRCProject{
+    'data':{
+        'Images':{
+            'png':{
+                class1{
+                    patient_dir(include roi, raw)
+                    },
+                class2{
+                    patient_dir(include roi, raw)
+                    },
+                class3{
+                    patient_dir(include roi, raw)
+                    },
+                },
+            'png_sum'
+        }, 
+        'mapping_file.csv'
+    },
+    'LOG':{
+        'mobilenet_v1':{
+            'fold1':[
+            '_loss.png',
+            '_metrics.png',
+            '_history.json'
+            ],
+            'fold2':[
+            '_loss.png',
+            '_metrics.png',
+            '_history.json'
+            ],
+            ...
+        },
+        'resnet50':{
+            'fold1':[
+            '_loss.png',
+            '_metrics.png',
+            '_history.json'
+            ],
+            'fold2':[
+            '_loss.png',
+            '_metrics.png',
+            '_history.json'
+            ],
+            ...
+        },
+        ...
+    },
+    'Parameters':{
+        'mobilenet_v1':{
+            'fold1':[
+            'fold_1.pt'
+            ],
+            'fold2':[
+            'fold_2.pt'
+            ],
+            ...
+        },
+        'resnet50':{
+            'fold1':[
+            'fold_1.pt'
+            ],
+            'fold2':[
+            'fold_2.pt'
+            ],
+            ...
+        },
+        ...
+    }
+
+}
+"""

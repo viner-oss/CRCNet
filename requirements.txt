@@ -1,0 +1,8 @@
+# requirements.txt
+matplotlib==3.10.0
+torch==2.6.0
+opencv-python==4.11.0.86
+torchmetrics==1.6.2
+scikit-learn==1.7.1
+pandas==2.2.3
+numpy==2.2.3
