@@ -398,9 +398,9 @@ class TrainLogitsKsLoop:
         self.Ts = kwargs.get('Ts', 10_000)
         self.warmup_T = kwargs.get('warmup_T', 1_000)
         self.root_dir = kwargs.get('root_dir')
-        self.save_abs_dir = kwargs.get('save_root_dir')
-        self.log_abs_dir = kwargs.get('log_root_dir')
-        self.metrics_abs_dir = kwargs.get('metrics_root_dir')
+        self.save_abs_dir = kwargs.get('save_abst_dir')
+        self.log_abs_dir = kwargs.get('log_abs_dir')
+        self.metrics_abs_dir = kwargs.get('metrics_abs_dir')
         self.num_classes = kwargs.get('num_classes', 3)
         self.batch = kwargs.get('batch', 64)
         self.accumulation_steps = kwargs.get('accumulation_steps', 2)
@@ -993,6 +993,7 @@ if __name__ == "__main__":
     # print(act)
     # print(act.shape)
     pass
+
 
 
 
