@@ -325,6 +325,8 @@ class TrainLogitsFoldLoop:
         if self.use_checkpoint:
             self.logger.log_user_info('Loading pretrained_weight ...')
             self._load_checkpoints()
+
+        self._get_device_name()
         self.logger.log_base_info(self.model_name, self.hyperparameters, self.ds_name, self.device_name)
 
         running_loss = 0.
@@ -713,6 +715,7 @@ class TrainCRCFoldLoop:
             self.logger.log_user_info('Loading pretrained_weight ...')
             self._load_checkpoints()
 
+        self._get_device_name()
         self.logger.log_base_info(self.model_name_dict['crcnet'], self.hyperparameters, self.ds_name, self.device_name)
 
         running_loss = 0.
@@ -997,6 +1000,7 @@ if __name__ == "__main__":
     # print(act)
     # print(act.shape)
     pass
+
 
 
 
