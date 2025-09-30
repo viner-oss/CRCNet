@@ -106,18 +106,21 @@ class TrainLogitsFoldLoop:
         self.model = get_model(self.model_name, **self.model_dict)
 
     def _init_opt(self):
-        self.opt = get_optimizer(self.opt_name, self.model.parameters(), **self.opt_dict.update(lr=self.lr))
+        self.opt_dict.update(lr=self.lr)
+        self.opt = get_optimizer(self.opt_name, self.model.parameters(), **self.opt_dict)
 
     def _init_lr_scheduler(self):
+        self.lr_dict.update(
+            warmup_T=self.warmup_T, Ts=self.Ts
+        )
         self.lr_scheduler = get_lr_scheduler(
-            self.lr_scheduler_name, self.opt, **self.lr_dict.update(
-                warmup_T=self.warmup_T, Ts=self.Ts
-            )
+            self.lr_scheduler_name, self.opt, **self.lr_dict
         )
 
     def _init_criterion(self):
+        self.criterion_dict.update(proportions=self.proportions, device=self.device)
         self.criterion = get_criterion(
-            self.criterion_name, **self.criterion_dict.update(proportions=self.proportions, device=self.device)
+            self.criterion_name, **self.criterion_dict
         )
 
     def _init_timer(self):
@@ -572,20 +575,21 @@ class TrainCRCFoldLoop:
             self.models[key] = get_model(value, **self.model_dict)
 
     def _init_opt(self):
-        self.opt = get_optimizer(
-            self.opt_name, self.models['crcnet'].parameters(), **self.opt_dict.update(lr=self.lr)
-        )
+        self.opt_dict.update(lr=self.lr)
+        self.opt = get_optimizer(self.opt_name, self.model.parameters(), **self.opt_dict)
 
     def _init_lr_scheduler(self):
+        self.lr_dict.update(
+            warmup_T=self.warmup_T, Ts=self.Ts
+        )
         self.lr_scheduler = get_lr_scheduler(
-            self.lr_scheduler_name, self.opt, **self.lr_dict.update(
-                warmup_T=self.warmup_T, Ts=self.Ts
-            )
+            self.lr_scheduler_name, self.opt, **self.lr_dict
         )
 
     def _init_criterion(self):
+        self.criterion_dict.update(proportions=self.proportions, device=self.device)
         self.criterion = get_criterion(
-            self.criterion_name, **self.criterion_dict.update(proportions=self.proportions, device=self.device)
+            self.criterion_name, **self.criterion_dict
         )
 
     def _init_timer(self):
@@ -993,6 +997,7 @@ if __name__ == "__main__":
     # print(act)
     # print(act.shape)
     pass
+
 
 
 
