@@ -25,12 +25,12 @@ def logits_default(
 
     model_specific = {
         "resnet50": dict(
-            name = 'resnet50',
+            model_name = 'resnet50',
             depth = 4,
             base_chs = 64,
         ),
         "mobilenet_v1": dict(
-            name = 'mobilenet_v1',
+            model_name = 'mobilenet_v1',
             width_mult = 1.0,
         ),
         "resnet50film": dict(
@@ -159,3 +159,4 @@ def _load_state_dict(
             print(f"  missing_keys: {missing}")
             print(f"  unexpected_keys: {unexpected}")
     return model
+
