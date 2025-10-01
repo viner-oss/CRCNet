@@ -91,7 +91,7 @@ class TrainLogitsFoldLoop:
         )
 
         make_dirs(self.metrics_pth)
-
+        
     def _init_logger(self):
         assert self.use_logger, f"Strongly suggest using logger"
         self.logger = Logger(self.log_root_dir, f'fold_{self.fold+1}.log')
@@ -111,8 +111,7 @@ class TrainLogitsFoldLoop:
 
     def _init_lr_scheduler(self):
         self.lr_dict.update(
-            warmup_T=self.warmup_T, Ts=self.Ts
-        )
+                warmup_T=self.warmup_T, Ts=self.Ts)
         self.lr_scheduler = get_lr_scheduler(
             self.lr_scheduler_name, self.opt, **self.lr_dict
         )
@@ -145,7 +144,7 @@ class TrainLogitsFoldLoop:
         self.train_fold_ds, self.val_fold_ds = self.ds_list[self.fold][0], self.ds_list[self.fold][1]
         self.train_dl, self.val_dl = (DataLoader(self.train_fold_ds, self.batch, True, num_workers=4, pin_memory=True, drop_last=False),
                             DataLoader(self.val_fold_ds, self.batch, False, num_workers=4, pin_memory=True, drop_last=False))
-
+    
     def _load_checkpoints(self):
         ckpt = torch.load(self.checkpoint_pth, map_location=self.device)
         self.model.load_state_dict(ckpt['model'])
@@ -171,54 +170,188 @@ class TrainLogitsFoldLoop:
     def _val_classifier_loop(
             self, *args
     ):
-        legend = []
-        for item in args:
-            legend.append(item)
+        legend = list(args)
         valid_metrics = Accumulator(legend)
-
-        for batch, cond in self.val_dl:
-            move2device(self.ema_model, batch, cond, device=self.device)
-            logits = self.ema_model(batch)
-
-            loss = self.criterion(logits, cond) if "val_loss" in legend else None
-            accuracy = compute_accuracy(logits, cond, self.device, self.num_classes) if "accuracy" in legend else None
-            precision = compute_precision(logits, cond, self.device, self.num_classes) if "precision" in legend else None
-            recall = compute_recall(logits, cond, self.device, self.num_classes) if "recall" in legend else None
-            f1 = compute_f1(logits, cond, self.device, self.num_classes) if "f1" in legend else None
-            auc = compute_auc_roc(logits, cond, self.device, self.num_classes) if "auc" in legend else None
-            confusion_matrix = compute_confusion_matrix(logits, cond, self.device, self.num_classes) if "confusion_matrix" in legend else None
-            valid_metrics.update(
-                loss=loss, accuracy=accuracy, precision=precision, recall=recall, f1=f1, confusion_matrix=confusion_matrix, auc=auc
-            )
+    
+        # self.ema_model.to(self.device)
+        # self.ema_model.eval()
+        self.model.eval()
+    
+        with torch.no_grad(): 
+            for batch, cond in self.val_dl:
+                batch, cond = move2device(self.device, batch, cond)
+    
+                # logits = self.ema_model(batch)
+                logits = self.model(batch)
+    
+                if "val_loss" in legend:
+                    loss = self.criterion(logits, cond)
+                    loss_val = float(loss.detach().cpu().item())
+                else:
+                    loss_val = None
+    
+                if "accuracy" in legend:
+                    accuracy = compute_accuracy(logits, cond, self.device, self.num_classes)
+                    accuracy_val = float(accuracy.detach().cpu().item()) if isinstance(accuracy, torch.Tensor) else float(accuracy)
+                else:
+                    accuracy_val = None
+    
+                if "precision" in legend:
+                    precision = compute_precision(logits, cond, self.device, self.num_classes)
+                    precision_val = float(precision.detach().cpu().item()) if isinstance(precision, torch.Tensor) else float(precision)
+                else:
+                    precision_val = None
+    
+                if "recall" in legend:
+                    recall = compute_recall(logits, cond, self.device, self.num_classes)
+                    recall_val = float(recall.detach().cpu().item()) if isinstance(recall, torch.Tensor) else float(recall)
+                else:
+                    recall_val = None
+    
+                if "f1" in legend:
+                    f1 = compute_f1(logits, cond, self.device, self.num_classes)
+                    f1_val = float(f1.detach().cpu().item()) if isinstance(f1, torch.Tensor) else float(f1)
+                else:
+                    f1_val = None
+    
+                if "auc" in legend:
+                    auc = compute_auc_roc(logits, cond, self.device, self.num_classes)
+                    auc_val = float(auc.detach().cpu().item()) if isinstance(auc, torch.Tensor) else float(auc)
+                else:
+                    auc_val = None
+    
+                if "confusion_matrix" in legend:
+                    cm = compute_confusion_matrix(logits, cond, self.device, self.num_classes)
+                    if isinstance(cm, torch.Tensor):
+                        cm = cm.detach().cpu().numpy()
+                    cm_val = cm
+                else:
+                    cm_val = None
+    
+                valid_metrics.update(
+                    val_loss=loss_val,
+                    accuracy=accuracy_val,
+                    precision=precision_val,
+                    recall=recall_val,
+                    f1=f1_val,
+                    confusion_matrix=cm_val,
+                    auc=auc_val
+                )
+    
         return valid_metrics.mean_return()
 
     def _val_guide_loop(self, *args):
-        legend = []
-        for item in args:
-            legend.append(item)
+        legend = list(args)
         valid_metrics = Accumulator(legend)
+    
+        # self.ema_model.to(self.device)
+        # self.ema_model.eval()
+        self.model.eval()
 
-        for batch, cond in self.val_dl:
-            move2device(self.ema_model, batch, cond, device=self.device)
+        with torch.no_grad():
+            for batch, cond in self.val_dl:
+                batch, cond = move2device(self.device, batch, cond)
+    
+                t_idx = torch.randint(0, 50, size=[batch.shape[0], ], device=batch.device)
+                xt, _ = self.diffusion.q_sample(batch, t_idx)
+                # logits = self.ema_model(xt, t_idx)
+                logits = self.model(xt, t_idx)
+                
+                if "val_loss" in legend:
+                    loss = self.criterion(logits, cond)
+                    loss_val = float(loss.detach().cpu().item())
+                else:
+                    loss_val = None
+    
+                if "accuracy" in legend:
+                    accuracy = compute_accuracy(logits, cond, self.device, self.num_classes)
+                    accuracy_val = float(accuracy.detach().cpu().item()) if isinstance(accuracy, torch.Tensor) else float(accuracy)
+                else:
+                    accuracy_val = None
+    
+                if "precision" in legend:
+                    precision = compute_precision(logits, cond, self.device, self.num_classes)
+                    precision_val = float(precision.detach().cpu().item()) if isinstance(precision, torch.Tensor) else float(precision)
+                else:
+                    precision_val = None
+    
+                if "recall" in legend:
+                    recall = compute_recall(logits, cond, self.device, self.num_classes)
+                    recall_val = float(recall.detach().cpu().item()) if isinstance(recall, torch.Tensor) else float(recall)
+                else:
+                    recall_val = None
+    
+                if "f1" in legend:
+                    f1 = compute_f1(logits, cond, self.device, self.num_classes)
+                    f1_val = float(f1.detach().cpu().item()) if isinstance(f1, torch.Tensor) else float(f1)
+                else:
+                    f1_val = None
+    
+                if "auc" in legend:
+                    auc = compute_auc_roc(logits, cond, self.device, self.num_classes)
+                    auc_val = float(auc.detach().cpu().item()) if isinstance(auc, torch.Tensor) else float(auc)
+                else:
+                    auc_val = None
+    
+                if "confusion_matrix" in legend:
+                    cm = compute_confusion_matrix(logits, cond, self.device, self.num_classes)
+                    if isinstance(cm, torch.Tensor):
+                        cm = cm.detach().cpu().numpy()
+                    cm_val = cm
+                else:
+                    cm_val = None
+    
+                valid_metrics.update(
+                    val_loss=loss_val,
+                    accuracy=accuracy_val,
+                    precision=precision_val,
+                    recall=recall_val,
+                    f1=f1_val,
+                    confusion_matrix=cm_val,
+                    auc=auc_val
+                )
 
-            t_idx = torch.randint(0, self.diffusion_dict["num_timesteps"], size=[batch.shape[0], ], device=batch.device)
-            xt, _ = self.diffusion.q_sample(batch, t_idx)
-            logits = self.ema_model(xt, t_idx)
-
-            loss = self.criterion(logits, cond) if "val_loss" in legend else None
-            accuracy = compute_accuracy(logits, cond, self.device, self.num_classes) if "accuracy" in legend else None
-            precision = compute_precision(logits, cond, self.device,
-                                          self.num_classes) if "precision" in legend else None
-            recall = compute_recall(logits, cond, self.device, self.num_classes) if "recall" in legend else None
-            f1 = compute_f1(logits, cond, self.device, self.num_classes) if "f1" in legend else None
-            confusion_matrix = compute_confusion_matrix(logits, cond, self.device,
-                                                        self.num_classes) if "confusion_matrix" in legend else None
-            valid_metrics.update(
-                loss=loss, accuracy=accuracy, precision=precision, recall=recall, f1=f1,
-                confusion_matrix=confusion_matrix
-            )
         return valid_metrics.mean_return()
 
+    def diagnostics(self):
+        print("LR:", self.opt.param_groups[0]['lr'], "weight_decay:", self.opt.param_groups[0].get('weight_decay', 0))
+    
+        total_grad_norm = 0.0
+        for p in self.model.parameters():
+            if p.grad is not None:
+                total_grad_norm += float(p.grad.norm().item())
+        print("total_grad_norm:", total_grad_norm)
+    
+        total_param_norm = 0.0
+        for p in self.model.parameters():
+            total_param_norm += float(p.data.norm().item())
+        print("total_param_norm:", total_param_norm)
+    
+        if not hasattr(self, '_init_snapshot'):
+            self._init_snapshot = {k: v.clone().detach() for k, v in self.model.state_dict().items() if v.dtype.is_floating_point}
+        if not hasattr(self, '_prev_snapshot'):
+            self._prev_snapshot = {k: v.clone().detach() for k, v in self.model.state_dict().items() if v.dtype.is_floating_point}
+    
+        init_diff = 0.0
+        prev_diff = 0.0
+        for k, v in self.model.state_dict().items():
+            if not v.dtype.is_floating_point:
+                continue
+            init_diff += torch.sum((v.detach() - self._init_snapshot[k])**2).item()
+            prev_diff += torch.sum((v.detach() - self._prev_snapshot[k])**2).item()
+    
+        print("init_diff_norm:", init_diff, "prev_diff_norm:", prev_diff)
+    
+        layer_diffs = []
+        for k, v in self.model.state_dict().items():
+            if not v.dtype.is_floating_point: continue
+            layer_diffs.append((k, float(torch.sum((v.detach() - self._prev_snapshot[k])**2).item())))
+        layer_diffs = sorted(layer_diffs, key=lambda x: x[1], reverse=True)
+        print("top 5 changed layers:", layer_diffs[:5])
+        print("top 5 least changed layers:", layer_diffs[-5:])
+    
+        self._prev_snapshot = {k: v.clone().detach() for k, v in self.model.state_dict().items() if v.dtype.is_floating_point}
+    
     def run_classifier_loop(self):
         self._init_logger()
         self._init_timer()
@@ -231,6 +364,7 @@ class TrainLogitsFoldLoop:
 
         self.logger.log_user_info('Creating Model ...')
         self._init_model()
+        self._init_ema_model()
 
         self.logger.log_user_info('Creating optimizer & lr_scheduler & criterion ...')
         self._init_opt()
@@ -241,16 +375,17 @@ class TrainLogitsFoldLoop:
             self.logger.log_user_info('Loading pretrained_weight ...')
             self._load_checkpoints()
 
+        self._get_device_name()
         self.logger.log_base_info(self.model_name, self.hyperparameters, self.ds_name, self.device_name)
 
         running_loss = 0.
         self.opt.zero_grad()
-        move2device(
-            self.model, self.ema_model, device=self.device
+        self.model, self.ema_model = move2device(
+            self.device, self.model, self.ema_model
         )
 
         train_iter = iter(self.train_dl)
-
+        
         while (
                 not self.early_stopper.early_stop or
                 self.step != self.Ts
@@ -261,9 +396,9 @@ class TrainLogitsFoldLoop:
             except StopIteration:
                 train_iter = iter(self.train_dl)
                 batch, cond = next(train_iter)
-
-            move2device(
-                batch, cond, device=self.device
+            
+            batch, cond = move2device(
+                self.device, batch, cond
             )
             logits = self.model(batch)
             self.step += 1
@@ -277,7 +412,9 @@ class TrainLogitsFoldLoop:
             if self.step % self.accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
                 self.opt.step()
+
                 self._update_ema()
+                
                 self.opt.zero_grad()
                 if self.lr_scheduler is not None:
                     self.lr_scheduler.step()
@@ -285,7 +422,7 @@ class TrainLogitsFoldLoop:
             if self.step % self.log_interval == 0:
                 avg_loss = running_loss / self.step
                 self.logger.log(train_step=self.step, train_loss=avg_loss)
-
+                
             if self.step % self.val_interval == 0:
                 _, curr_time = self.timer.stop()
                 curr_lr = self.opt.param_groups[0]['lr']
@@ -295,6 +432,9 @@ class TrainLogitsFoldLoop:
 
                 self.early_stopper(val_metrics["val_loss"])
 
+                
+                
+        
         self._save_checkpoint()
         visualizer = LogVisualizer(self.logger.history, (3.5, 2.5))
         visualizer.plot_loss('train', os.path.join(self.metrics_pth, '_train.png'))
@@ -313,6 +453,7 @@ class TrainLogitsFoldLoop:
 
         self.logger.log_user_info('Creating Model ...')
         self._init_model()
+        self._init_ema_model()
 
         self.logger.log_user_info('Creating optimizer & lr_scheduler & criterion ...')
         self._init_opt()
@@ -325,14 +466,12 @@ class TrainLogitsFoldLoop:
         if self.use_checkpoint:
             self.logger.log_user_info('Loading pretrained_weight ...')
             self._load_checkpoints()
-
-        self._get_device_name()
         self.logger.log_base_info(self.model_name, self.hyperparameters, self.ds_name, self.device_name)
 
         running_loss = 0.
         self.opt.zero_grad()
-        move2device(
-            self.model, self.ema_model, device=self.device
+        self.model, self.ema_model = move2device(
+            self.device, self.model, self.ema_model
         )
 
         train_iter = iter(self.train_dl)
@@ -348,10 +487,10 @@ class TrainLogitsFoldLoop:
                 train_iter = iter(self.train_dl)
                 batch, cond = next(train_iter)
 
-            move2device(
-                batch, cond, device=self.device
+            batch, cond = move2device(
+                self.device, batch, cond
             )
-            t_idx = torch.randint(0, self.diffusion_dict["num_timesteps"], size=[batch.shape[0], ], device=batch.device)
+            t_idx = torch.randint(0, 50, size=[batch.shape[0], ], device=batch.device)
             xt, _ = self.diffusion.q_sample(batch, t_idx)
             logits = self.model(xt, t_idx)
             self.step += 1
@@ -378,7 +517,7 @@ class TrainLogitsFoldLoop:
                 _, curr_time = self.timer.stop()
                 curr_lr = self.opt.param_groups[0]['lr']
                 val_metrics = self._val_guide_loop("val_loss", "accuracy", "precision", "recall", "f1",
-                                             "confusion_matrix")
+                                             "confusion_matrix", "auc")
                 self.logger.log(val_step=self.step, val_metrics=val_metrics, lr=curr_lr, time=curr_time)
 
                 self.early_stopper(val_metrics["val_loss"])
@@ -403,7 +542,7 @@ class TrainLogitsKsLoop:
         self.Ts = kwargs.get('Ts', 10_000)
         self.warmup_T = kwargs.get('warmup_T', 1_000)
         self.root_dir = kwargs.get('root_dir')
-        self.save_abs_dir = kwargs.get('save_abst_dir')
+        self.save_abs_dir = kwargs.get('save_abs_dir')
         self.log_abs_dir = kwargs.get('log_abs_dir')
         self.metrics_abs_dir = kwargs.get('metrics_abs_dir')
         self.num_classes = kwargs.get('num_classes', 3)
@@ -578,12 +717,13 @@ class TrainCRCFoldLoop:
 
     def _init_opt(self):
         self.opt_dict.update(lr=self.lr)
-        self.opt = get_optimizer(self.opt_name, self.model.parameters(), **self.opt_dict)
+        self.opt = get_optimizer(
+            self.opt_name, self.models['crcnet'].parameters(), **self.opt_dict
+        )
 
     def _init_lr_scheduler(self):
         self.lr_dict.update(
-            warmup_T=self.warmup_T, Ts=self.Ts
-        )
+                warmup_T=self.warmup_T, Ts=self.Ts)
         self.lr_scheduler = get_lr_scheduler(
             self.lr_scheduler_name, self.opt, **self.lr_dict
         )
@@ -664,32 +804,75 @@ class TrainCRCFoldLoop:
                 return out
 
     def _val_loop(self, *args):
-        legend = []
-        for item in args:
-            legend.append(item)
+        legend = list(args)
         valid_metrics = Accumulator(legend)
-
-        for batch, cond in self.val_dl:
-            move2device(self.ema_model, batch, cond, device=self.device)
-
-            t_idx = torch.randint(0, self.diffusion_dict["num_timesteps"], size=[batch.shape[0], ], device=batch.device)
-            xt, r_noise = self.diffusion.q_sample(batch, t_idx)
-            low_semantic = self._obtain_semantic_feats(batch, target_layer='feats.5')
-            high_semantic = self._obtain_semantic_feats(xt, t_idx, target_layer='avgpool')
-            logits, eps = self.models['crcnet'](xt, t_idx, low_semantic, high_semantic)
-
-            loss = self.criterion(logits, cond, eps, r_noise) if "val_loss" in legend else None
-            accuracy = compute_accuracy(logits, cond, self.device, self.num_classes) if "accuracy" in legend else None
-            precision = compute_precision(logits, cond, self.device,
-                                          self.num_classes) if "precision" in legend else None
-            recall = compute_recall(logits, cond, self.device, self.num_classes) if "recall" in legend else None
-            f1 = compute_f1(logits, cond, self.device, self.num_classes) if "f1" in legend else None
-            confusion_matrix = compute_confusion_matrix(logits, cond, self.device,
-                                                        self.num_classes) if "confusion_matrix" in legend else None
-            valid_metrics.update(
-                loss=loss, accuracy=accuracy, precision=precision, recall=recall, f1=f1,
-                confusion_matrix=confusion_matrix
-            )
+    
+        # self.ema_model.to(self.device)
+        # self.ema_model.eval()
+        self.model.eval()
+        with torch.no_grad():
+            for batch, cond in self.val_dl:
+                batch, cond = move2device(self.device, batch, cond)
+    
+                t_idx = torch.randint(0, 50, size=[batch.shape[0], ], device=batch.device)
+                xt, r_noise = self.diffusion.q_sample(batch, t_idx)
+                low_semantic = self._obtain_semantic_feats(batch, target_layer='feats.5')
+                high_semantic = self._obtain_semantic_feats(xt, t_idx, target_layer='avgpool')
+                logits, eps = self.models['crcnet'](xt, t_idx, low_semantic, high_semantic)
+    
+                if "val_loss" in legend:
+                    loss = self.criterion(logits, cond)
+                    loss_val = float(loss.detach().cpu().item())
+                else:
+                    loss_val = None
+    
+                if "accuracy" in legend:
+                    accuracy = compute_accuracy(logits, cond, self.device, self.num_classes)
+                    accuracy_val = float(accuracy.detach().cpu().item()) if isinstance(accuracy, torch.Tensor) else float(accuracy)
+                else:
+                    accuracy_val = None
+    
+                if "precision" in legend:
+                    precision = compute_precision(logits, cond, self.device, self.num_classes)
+                    precision_val = float(precision.detach().cpu().item()) if isinstance(precision, torch.Tensor) else float(precision)
+                else:
+                    precision_val = None
+    
+                if "recall" in legend:
+                    recall = compute_recall(logits, cond, self.device, self.num_classes)
+                    recall_val = float(recall.detach().cpu().item()) if isinstance(recall, torch.Tensor) else float(recall)
+                else:
+                    recall_val = None
+    
+                if "f1" in legend:
+                    f1 = compute_f1(logits, cond, self.device, self.num_classes)
+                    f1_val = float(f1.detach().cpu().item()) if isinstance(f1, torch.Tensor) else float(f1)
+                else:
+                    f1_val = None
+    
+                if "auc" in legend:
+                    auc = compute_auc_roc(logits, cond, self.device, self.num_classes)
+                    auc_val = float(auc.detach().cpu().item()) if isinstance(auc, torch.Tensor) else float(auc)
+                else:
+                    auc_val = None
+    
+                if "confusion_matrix" in legend:
+                    cm = compute_confusion_matrix(logits, cond, self.device, self.num_classes)
+                    if isinstance(cm, torch.Tensor):
+                        cm = cm.detach().cpu().numpy()
+                    cm_val = cm
+                else:
+                    cm_val = None
+    
+                valid_metrics.update(
+                    val_loss=loss_val,
+                    accuracy=accuracy_val,
+                    precision=precision_val,
+                    recall=recall_val,
+                    f1=f1_val,
+                    confusion_matrix=cm_val,
+                    auc=auc_val
+                )
         return valid_metrics.mean_return()
 
     def run_loop(self):
@@ -705,6 +888,7 @@ class TrainCRCFoldLoop:
 
         self.logger.log_user_info('Creating Model ...')
         self._init_model()
+        self._init_ema_model()
 
         self.logger.log_user_info('Creating optimizer & lr_scheduler & criterion ...')
         self._init_opt()
@@ -720,8 +904,8 @@ class TrainCRCFoldLoop:
 
         running_loss = 0.
         self.opt.zero_grad()
-        move2device(
-            self.models['classifier'], self.models['guide'], self.models['crcnet'] , self.ema_model, device=self.device
+        self.models['classifier'], self.models['guide'], self.models['crcnet'] , self.ema_model = move2device(
+            self.device, self.models['classifier'], self.models['guide'], self.models['crcnet'] , self.ema_model
         )
 
         train_iter = iter(self.train_dl)
@@ -737,11 +921,11 @@ class TrainCRCFoldLoop:
                 train_iter = iter(self.train_dl)
                 batch, rois, cond = next(train_iter)
 
-            move2device(
-                batch, rois, cond, device=self.device
+            batch, rois, cond = move2device(
+                self.device, batch, rois, cond
             )
 
-            t_idx = torch.randint(0, self.diffusion_dict["num_timesteps"], size=[batch.shape[0], ], device=batch.device)
+            t_idx = torch.randint(0, 50, size=[batch.shape[0], ], device=batch.device)
             xt, r_noise = self.diffusion.q_sample(batch, t_idx)
 
             low_semantic = self._obtain_semantic_feats(batch, target_layer='feats.5')
@@ -959,10 +1143,8 @@ class ActivationExtractor:
     def __exit__(self, exc_type, exc, tb):
         self.remove()
 
-def move2device(*args, device):
-    for item in args:
-        assert hasattr(item, "to"), f"item {item} has no attr of .to()"
-        item.to(device)
+def move2device(device, *args):
+    return tuple(a.to(device) if hasattr(a, "to") else a for a in args)
 
 def make_dirs(*args):
     for item in args:
@@ -1000,9 +1182,6 @@ if __name__ == "__main__":
     # print(act)
     # print(act.shape)
     pass
-
-
-
 
 
 
