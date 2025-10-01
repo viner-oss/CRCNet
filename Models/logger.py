@@ -57,20 +57,26 @@ class Logger:
             msg += f"Step [{step}] | Train Loss: {train_loss:.6f}\n"
         if val_metrics is not None:
             for tag, value in val_metrics.items():
-                msg += f"Step [{step}] | {tag}: {value:.6f\n}"
+                msg += f"Step [{step}] | {tag}: {_format_metric(value)}\n"
         if lr is not None:
-            msg += f"Step [{step}] | LR: {lr:.6f\n}"
+            msg += f"Step [{step}] | LR: {lr:.6f}\n"
         if time is not None:
-            msg += f"Step [{step}] | Time: {time:.6f}s\n"
+            msg += f"Step [{step}] | Time: {time}s\n"
         self.logger.info(msg)
 
-        self.history["train_step"].append(step) if train_step is not None else None
-        self.history["val_step"].append(step) if val_step is not None else None
-        self.history["train_loss"].append(train_loss)
-        self.history["val_loss"].append(val_metrics["val_loss"] if val_metrics["val_loss"] is not None else None)
-        self.history["lr"].append(lr if lr is not None else None)
+        if train_step is not None:
+            self.history["train_step"].append(step)
+        if train_loss is not None:
+            self.history["train_loss"].append(train_loss)
+        if val_step is not None:
+            self.history["val_step"].append(step)
+        if val_metrics is not None and val_metrics.get('val_loss') is not None:
+            self.history["val_loss"].append(val_metrics["val_loss"])
+        if lr is not None:
+            self.history["lr"].append(lr) 
         for key, value in self.history["val_metrics"].items():
-            value.append(val_metrics[key] if val_metrics[key] is not None else None)
+            if val_metrics is not None and val_metrics[key] is not None: 
+                value.append(val_metrics[key])
 
 
     def save_history(self, path=None):
@@ -119,3 +125,19 @@ class LogVisualizer:
 def _is_np(x):
     if not type(x) == np.ndarray:
         return np.array(x)
+
+def _format_metric(value):
+    if value is None:
+        return "None"
+    try:
+        import torch
+        if torch.is_tensor(value):
+            if value.numel() == 1:
+                return f"{float(value.item()):.6f}"
+            return str(value.tolist())
+    except Exception:
+        pass
+    try:
+        return f"{float(value):.6f}"
+    except Exception:
+        return str(value)
