@@ -1,9 +1,11 @@
 import os
 import logging
 import json
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from Utils.tools import is_image_pth, PlotBoard
+from typing import Optional, Iterable
 
 class Logger:
     def __init__(self, log_dir="logs", log_name="train.log"):
@@ -84,6 +86,14 @@ class Logger:
         with open(path, "w") as f:
             json.dump(self.history, f, indent=4)
 
+    def close_logger(self):
+        for h in list(self.logger.handlers):
+            self.logger.removeHandler(h)
+            try:
+                h.close()
+            except Exception:
+                pass
+    
 
 class LogVisualizer:
     def __init__(self, history, figsize):
@@ -92,39 +102,158 @@ class LogVisualizer:
 
     def plot_loss(self, loss_type, save_pth=None):
         assert is_image_pth(save_pth)
-        os.makedirs(save_pth, exist_ok=True)
+
         if loss_type == 'train':
-            x = _is_np(self.history["train_step"])
-            y = _is_np(self.history["train_loss"])
-            self.plotboard.plot(x, y, 'step', 'loss')
-            plt.savefig(save_pth)
-
+            x_raw = self.history.get("train_step", [])
+            y_raw = self.history.get("train_loss", [])
         elif loss_type == 'val':
-            x = _is_np(self.history["val_step"])
-            y = _is_np(self.history["val_loss"])
-            self.plotboard.plot(x, y, 'step', 'loss')
-            plt.savefig(save_pth)
-
+            x_raw = self.history.get("val_step", [])
+            y_raw = self.history.get("val_loss", [])
         else:
-            raise ValueError(f"Unknown loss type {loss_type}")
+            raise ValueError(f"Unknown loss type {loss_type!r}")
+    
+        x_arr = _list_to_numpy(x_raw)
+        y_arr = _list_to_numpy(y_raw)
+    
+        if x_arr.size == 0 and y_arr.size > 0:
+            x_arr = np.arange(len(y_arr))
+        if y_arr.size == 0:
+            print(f"No {loss_type} loss data to plot.")
+            return
+    
+        
+        plt.figure()
+        axes = plt.gca()
+        try:
+            self.plotboard.plot(X=x_arr.tolist(), Y=y_arr.tolist(),
+                                xlabel='step', ylabel='loss', axes=axes)
+        except Exception as e:
+            print("plotboard.plot failed, fallback to matplotlib. Error:", e)
+            axes.cla()
+            axes.plot(x_arr, y_arr, marker='o')
+            axes.set_xlabel('step')
+            axes.set_ylabel('loss')
+            axes.grid()
+            
+        plt.tight_layout()
+        plt.savefig(save_pth, bbox_inches='tight')
+        plt.close()
 
-    def plot_metrics(self, save_pth=None):
+    def plot_metrics(self, save_pth: Optional[str] = None):
         assert is_image_pth(save_pth)
-        os.makedirs(save_pth, exist_ok=True)
-
-        x = _is_np(self.history["val_step"])
-        y = []
+        x_raw = self.history.get("val_step", [])
+        x_arr = _seq_to_numpy(x_raw)
+    
+        y_list = []
         legend = []
-        for key, value in self.history["val_metrics"].items():
-            if key != "confusion_matrix":
-                legend.append(key)
-                y.append(_is_np(value))
-        self.plotboard.plot(x, y, 'step', 'metrics', legend)
-        plt.savefig(save_pth)
+        val_metrics = self.history.get("val_metrics", {})
+        if not isinstance(val_metrics, dict):
+            return
+    
+        for key, value in val_metrics.items():
+            if key == "confusion_matrix":
+                continue
+            arr = _seq_to_numpy(value)
+            if arr.size == 0:
+                continue
+            legend.append(key)
+            y_list.append(arr.tolist())
+    
+        if not y_list:
+            return
+    
+        if x_arr.size == 0:
+            length = len(y_list[0])
+            x_arr = np.arange(length)
+    
+        x_len = x_arr.shape[0]
+        aligned_y = []
+        for y in y_list:
+            if len(y) == x_len:
+                aligned_y.append(y)
+            elif len(y) > x_len:
+                aligned_y.append(y[:x_len])
+            else:
+                y_ext = list(y) + [float('nan')] * (x_len - len(y))
+                aligned_y.append(y_ext)
+    
+        plt.figure()
+        axes = plt.gca()
+        try:
+            self.plotboard.plot(X=x_arr.tolist(), Y=aligned_y, xlabel='step', ylabel='metrics', legend=legend, axes=axes)
+        except Exception as e:
+            print("plotboard.plot failed, fallback to matplotlib. Error:", e)
+            axes.cla()
+            for y, lg in zip(aligned_y, legend):
+                axes.plot(x_arr, y, marker='o', label=lg)
+            axes.set_xlabel('step')
+            axes.set_ylabel('metrics')
+            axes.legend()
+            axes.grid()
+    
+        plt.tight_layout()
+        plt.savefig(save_pth, bbox_inches='tight')
+        plt.close()
 
-def _is_np(x):
-    if not type(x) == np.ndarray:
-        return np.array(x)
+def _to_scalar(x):
+    if x is None:
+        return None
+    if isinstance(x, (float, int, np.floating, np.integer)):
+        return float(x)
+    if isinstance(x, torch.Tensor):
+        if x.numel() == 1:
+            return float(x.detach().cpu().item())
+        else:
+            return float(x.detach().cpu().mean().item())
+    if isinstance(x, np.ndarray):
+        if x.size == 1:
+            return float(x.flatten()[0])
+        else:
+            return float(x.mean())
+    try:
+        return float(x)
+    except Exception:
+        return None
+
+def _list_to_numpy(seq: Iterable):
+    vals = []
+    for e in seq:
+        v = _to_scalar(e)
+        if v is None:
+            continue
+        vals.append(v)
+    if not vals:
+        return np.array([], dtype=float)
+    return np.array(vals, dtype=float)
+
+
+def _seq_to_numpy(seq: Iterable):
+    if isinstance(seq, torch.Tensor):
+        try:
+            arr = seq.detach().cpu().numpy()
+        except Exception:
+            arr = np.array([])
+
+        if arr.ndim == 1:
+            return arr.astype(float)
+        else:
+            return np.array([np.mean(v) for v in arr]).astype(float)
+
+    if isinstance(seq, np.ndarray):
+        if seq.ndim == 1:
+            return seq.astype(float)
+        else:
+            return np.array([np.mean(v) for v in seq]).astype(float)
+
+    vals = []
+    for e in seq:
+        v = _to_scalar(e)
+        if v is None:
+            continue
+        vals.append(v)
+    if not vals:
+        return np.array([], dtype=float)
+    return np.array(vals, dtype=float)
 
 def _format_metric(value):
     if value is None:
