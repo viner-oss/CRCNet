@@ -1,5 +1,6 @@
 import torch
 import os.path
+import os
 from torch.utils.data import DataLoader
 from Models.logger import Logger, LogVisualizer
 from Utils.tools_setting import *
@@ -90,7 +91,8 @@ class TrainLogitsFoldLoop:
              ema_decay=self.ema_decay, log_interval=self.log_interval, val_interval=self.val_interval
         )
 
-        make_dirs(self.metrics_pth)
+        os.makedirs(self.metrics_pth, exist_ok=True)
+        os.makedirs(self.log_root_dir, exist_ok=True)
         
     def _init_logger(self):
         assert self.use_logger, f"Strongly suggest using logger"
@@ -126,7 +128,7 @@ class TrainLogitsFoldLoop:
         self.timer = Timer()
 
     def _init_early_stopper(self):
-        self.early_stopper = EarlyStopping(patience=50)
+        self.early_stopper = EarlyStopping(patience=20)
 
     def _init_ema_model(self):
         self.ema_model = get_ema_model(self.use_ema_model, self.model) if self.use_ema_model else None
@@ -385,10 +387,10 @@ class TrainLogitsFoldLoop:
         )
 
         train_iter = iter(self.train_dl)
-        
+
         while (
-                not self.early_stopper.early_stop or
-                self.step != self.Ts
+                not self.early_stopper.early_stop and
+                self.step <= self.Ts
         ):
             self.model.train()
             try:
@@ -431,15 +433,13 @@ class TrainLogitsFoldLoop:
                 self.logger.log(val_step=self.step, val_metrics=val_metrics, lr=curr_lr, time=curr_time)
 
                 self.early_stopper(val_metrics["val_loss"])
-
-                
-                
-        
+            
         self._save_checkpoint()
         visualizer = LogVisualizer(self.logger.history, (3.5, 2.5))
         visualizer.plot_loss('train', os.path.join(self.metrics_pth, '_train.png'))
         visualizer.plot_loss('val', os.path.join(self.metrics_pth, '_val.png'))
         visualizer.plot_metrics(os.path.join(self.metrics_pth, '_metrics.png'))
+        self.logger.close_logger()
 
     def run_guide_loop(self):
         self._init_logger()
@@ -477,8 +477,8 @@ class TrainLogitsFoldLoop:
         train_iter = iter(self.train_dl)
 
         while (
-                not self.early_stopper.early_stop or
-                self.step != self.Ts
+                not self.early_stopper.early_stop and
+                self.step <= self.Ts
         ):
             self.model.train()
             try:
@@ -527,6 +527,7 @@ class TrainLogitsFoldLoop:
         visualizer.plot_loss('train', os.path.join(self.metrics_pth, '_train.png'))
         visualizer.plot_loss('val', os.path.join(self.metrics_pth, '_val.png'))
         visualizer.plot_metrics(os.path.join(self.metrics_pth, '_metrics.png'))
+        self.logger.close_logger()
 
 class TrainLogitsKsLoop:
     def __init__(self,
@@ -572,6 +573,8 @@ class TrainLogitsKsLoop:
 
         train_tf, val_tf = get_pipeline(tf_type)
         self.ds_list = get_fold_data(Ks, train_tf, val_tf, self.ds)
+
+        os.makedirs(os.path.join(self.root_dir, self.save_abs_dir), exist_ok=True)
 
     def execute(self, name):
         for fold in range(self.Ks):
@@ -699,7 +702,9 @@ class TrainCRCFoldLoop:
             ema_decay=self.ema_decay, log_interval=self.log_interval, val_interval=self.val_interval
         )
 
-        make_dirs(self.metrics_pth)
+        os.makedirs(self.metrics_pth, exist_ok=True)
+        os.makedirs(self.log_root_dir, exist_ok=True)
+    
     def _init_logger(self):
         assert self.use_logger, f"Strongly suggest using logger"
         self.logger = Logger(self.log_root_dir, f'fold_{self.fold + 1}.log')
@@ -911,8 +916,8 @@ class TrainCRCFoldLoop:
         train_iter = iter(self.train_dl)
 
         while (
-                not self.early_stopper.early_stop or
-                self.step != self.Ts
+                not self.early_stopper.early_stop and
+                self.step <= self.Ts
         ):
             self.models['crcnet'].train()
             try:
@@ -965,6 +970,7 @@ class TrainCRCFoldLoop:
         visualizer.plot_loss('train', os.path.join(self.metrics_pth, '_train.png'))
         visualizer.plot_loss('val', os.path.join(self.metrics_pth, '_val.png'))
         visualizer.plot_metrics(os.path.join(self.metrics_pth, '_metrics.png'))
+        self.logger.close_logger()
 
 class TrainCRCKsLoop:
     def __init__(self,
@@ -1011,6 +1017,8 @@ class TrainCRCKsLoop:
         train_tf, val_tf = get_pipeline(tf_type)
         self.ds_list = get_fold_data(Ks, train_tf, val_tf, self.ds)
 
+        os.makedirs(os.path.join(self.root_dir, self.save_abs_dir), exist_ok=True)
+    
     def execute(self):
         for fold in range(self.Ks):
             TrainCRCFoldLoop(
