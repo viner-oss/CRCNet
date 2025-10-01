@@ -35,24 +35,15 @@ class Timer:
         return np.array(self.times).cumsum().tolist()
 
 class Accumulator:
-    """
-    Accumulator
-    add different metrics and return a dict
-    e.g.
-    val_metrics(class 'Accumulator') = {
-        'val_loss': [1.0, 0.9, 0.8, 0.7 ...],
-        'accuracy': [0.3, 0.4, 0.5, 0.6 ...]
-    }
-    """
-    def __init__(self,
-                 *args):
-        """
-
-        :param num: the number of evaluation indicators
-        """
-        self.metrics = {
-            name: [] for name in args
-        }
+    def __init__(self, *args):
+        if len(args) == 1 and isinstance(args[0], (list, tuple)):
+            args = args[0]
+        names = []
+        for name in args:
+            if not isinstance(name, (str, int, float)):
+                raise TypeError(f"Accumulator name must be str/int/float, got {type(name)}")
+            names.append(name)
+        self.metrics = {name: [] for name in names}
 
     def update(self, **kwargs):
         for name, value in kwargs.items():
@@ -64,10 +55,30 @@ class Accumulator:
             self.metrics[name] = []
 
     def mean_return(self):
-        return {
-            name: sum(value) / len(value) if value else None
-            for name, value in self.metrics.items()
-        }
+        out = {}
+        for name, values in self.metrics.items():
+            if not values:
+                out[name] = None
+                continue
+
+            first = values[0]
+            if isinstance(first, np.ndarray) and first.ndim >= 2:
+                s = np.sum(np.stack(values, axis=0), axis=0)
+                out[name] = s / len(values)
+                continue
+
+            nums = []
+            for v in values:
+                if v is None:
+                    continue
+                if isinstance(v, torch.Tensor):
+                    nums.append(float(v.detach().cpu().item()))
+                elif isinstance(v, np.ndarray):
+                    nums.append(float(v.tolist())) 
+                else:
+                    nums.append(float(v))
+            out[name] = float(sum(nums) / len(nums)) if nums else None
+        return out
 
     def __getitem__(self, item):
         return self.metrics[item]
@@ -253,6 +264,8 @@ def get_fold_data(K: int,
         fold.append((train_ds, val_ds))
     return fold
 
+import torch
+
 def init_ema_model(model: torch.nn.Module):
     ema_model = copy.deepcopy(model)
     for p in ema_model.parameters():
@@ -264,19 +277,29 @@ def init_ema_model(model: torch.nn.Module):
 def update_ema(model: torch.nn.Module,
                ema_model: torch.nn.Module,
                decay: float = 0.9999):
-    # -------------------------------
-    # Update EMA Model
-    # -------------------------------
-    msd = model.state_dict()
-    emsd = ema_model.state_dict()
-    for k, ema_v in emsd.items():
-        model_v = msd[k]
-        if not torch.is_floating_point(ema_v):
+    model_params = dict(model.named_parameters())
+    ema_params = dict(ema_model.named_parameters())
+
+    for name, ema_p in ema_params.items():
+        m_p = model_params.get(name, None)
+        if m_p is None:
             continue
-        model_v = model_v.to(ema_v.device).to(ema_v.dtype)
-        # ema_v = ema_v * decay + model_v * (1-decay)
-        ema_v.mul_(decay)
-        ema_v.add_(model_v, alpha=1.0 - decay)
+        ema_p.data.mul_(decay)
+        ema_p.data.add_(m_p.data.to(ema_p.data.device).to(ema_p.data.dtype), alpha=1.0 - decay)
+    model_buffers = dict(model.named_buffers())
+    ema_buffers = dict(ema_model.named_buffers())
+    for name, ema_b in ema_buffers.items():
+        m_b = model_buffers.get(name, None)
+        if m_b is None:
+            continue 
+        if not torch.is_floating_point(ema_b):
+            try:
+                ema_b.data.copy_(m_b.data.to(ema_b.data.device))
+            except Exception:
+                pass
+            continue
+        ema_b.data.mul_(decay)
+        ema_b.data.add_(m_b.data.to(ema_b.data.device).to(ema_b.data.dtype), alpha=1.0 - decay)
 
 
 
