@@ -10,7 +10,8 @@ from Models import (MobileNetV1,
                     ResNet50FiLM,
                     ResNet50,
                     CRCNet,
-                    VGG)
+                    VGG,
+                    EfficientNet)
 
 def get_optimizer(name,
                   model_params,
@@ -238,6 +239,30 @@ def get_model(name,
 
     elif name == 'vgg11':
         return VGG.vgg11_bn(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b0':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b1':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b2':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b3':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b4':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b5':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b6':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'efficientnet_b7':
+        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
     
     elif name == 'crcnet':
         return CRCNet.CRCnet(
