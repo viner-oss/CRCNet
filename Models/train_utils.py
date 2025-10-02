@@ -128,7 +128,7 @@ class TrainLogitsFoldLoop:
         self.timer = Timer()
 
     def _init_early_stopper(self):
-        self.early_stopper = EarlyStopping(patience=20)
+        self.early_stopper = EarlyStopping(patience=100)
 
     def _init_ema_model(self):
         self.ema_model = get_ema_model(self.use_ema_model, self.model) if self.use_ema_model else None
@@ -389,7 +389,7 @@ class TrainLogitsFoldLoop:
         train_iter = iter(self.train_dl)
 
         while (
-                not self.early_stopper.early_stop and
+                # not self.early_stopper.early_stop and
                 self.step <= self.Ts
         ):
             self.model.train()
@@ -466,8 +466,12 @@ class TrainLogitsFoldLoop:
         if self.use_checkpoint:
             self.logger.log_user_info('Loading pretrained_weight ...')
             self._load_checkpoints()
-        self.logger.log_base_info(self.model_name, self.hyperparameters, self.ds_name, self.device_name)
 
+        self._get_device_name()
+        self.logger.log_base_info(self.model_name, self.hyperparameters, self.ds_name, self.device_name)
+        
+        self._init_diffusion()
+        
         running_loss = 0.
         self.opt.zero_grad()
         self.model, self.ema_model = move2device(
