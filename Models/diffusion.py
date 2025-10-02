@@ -116,7 +116,7 @@ class GaussianDiffusion:
         return mean, variance, log_variance
 
     def q_sample(self, x_start, t_idx, noise=None):
-        if noise is not None:
+        if noise is None:
             noise = torch.randn_like(x_start)
         assert x_start.shape == noise.shape, "noise.shape must be equal to x0.shape"
         return (_extract_into_tensor(self.alphas_cumprod, t_idx, x_start.shape) * x_start +
