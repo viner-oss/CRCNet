@@ -7,6 +7,7 @@ from Utils.tools_setting import *
 from Utils.tools import *
 from Utils.evaluator import *
 from typing import Iterable, Dict, Any, List, Optional
+from torchmetrics.classification import AUROC
 
 class TrainLogitsFoldLoop:
     def __init__(self,
@@ -128,7 +129,7 @@ class TrainLogitsFoldLoop:
         self.timer = Timer()
 
     def _init_early_stopper(self):
-        self.early_stopper = EarlyStopping(patience=100)
+        self.early_stopper = EarlyStopping(patience=20)
 
     def _init_ema_model(self):
         self.ema_model = get_ema_model(self.use_ema_model, self.model) if self.use_ema_model else None
@@ -180,6 +181,12 @@ class TrainLogitsFoldLoop:
         self.model.eval()
     
         with torch.no_grad(): 
+            if "auc" in legend:
+                auroc_metric = AUROC(task='multiclass', num_classes=self.num_classes, average='macro').to(self.device)
+                auroc_metric.reset()
+            else:
+                auroc_metric = None
+            
             for batch, cond in self.val_dl:
                 batch, cond = move2device(self.device, batch, cond)
     
@@ -216,12 +223,6 @@ class TrainLogitsFoldLoop:
                 else:
                     f1_val = None
     
-                if "auc" in legend:
-                    auc = compute_auc_roc(logits, cond, self.device, self.num_classes)
-                    auc_val = float(auc.detach().cpu().item()) if isinstance(auc, torch.Tensor) else float(auc)
-                else:
-                    auc_val = None
-    
                 if "confusion_matrix" in legend:
                     cm = compute_confusion_matrix(logits, cond, self.device, self.num_classes)
                     if isinstance(cm, torch.Tensor):
@@ -237,9 +238,22 @@ class TrainLogitsFoldLoop:
                     recall=recall_val,
                     f1=f1_val,
                     confusion_matrix=cm_val,
-                    auc=auc_val
+                    auc=None
                 )
-    
+
+                if auroc_metric is not None:
+                    probs = F.softmax(logits, dim=1)
+                    auroc_metric.update(probs, cond.to(self.device))
+
+            if auroc_metric is not None:
+                try:
+                    auc = auroc_metric.compute() 
+                    auc_val = float(auc.detach().cpu().item())
+                except Exception as e:
+                    print("AUROC compute failed:", e)
+                    auc_val = float('nan')
+                valid_metrics.update(auc=auc_val)
+            
         return valid_metrics.mean_return()
 
     def _val_guide_loop(self, *args):
@@ -251,6 +265,12 @@ class TrainLogitsFoldLoop:
         self.model.eval()
 
         with torch.no_grad():
+            if "auc" in legend:
+                auroc_metric = AUROC(task='multiclass', num_classes=self.num_classes, average='macro').to(self.device)
+                auroc_metric.reset()
+            else:
+                auroc_metric = None
+            
             for batch, cond in self.val_dl:
                 batch, cond = move2device(self.device, batch, cond)
     
@@ -288,13 +308,7 @@ class TrainLogitsFoldLoop:
                     f1_val = float(f1.detach().cpu().item()) if isinstance(f1, torch.Tensor) else float(f1)
                 else:
                     f1_val = None
-    
-                if "auc" in legend:
-                    auc = compute_auc_roc(logits, cond, self.device, self.num_classes)
-                    auc_val = float(auc.detach().cpu().item()) if isinstance(auc, torch.Tensor) else float(auc)
-                else:
-                    auc_val = None
-    
+      
                 if "confusion_matrix" in legend:
                     cm = compute_confusion_matrix(logits, cond, self.device, self.num_classes)
                     if isinstance(cm, torch.Tensor):
@@ -310,8 +324,21 @@ class TrainLogitsFoldLoop:
                     recall=recall_val,
                     f1=f1_val,
                     confusion_matrix=cm_val,
-                    auc=auc_val
+                    auc=None
                 )
+
+                if auroc_metric is not None:
+                    probs = F.softmax(logits, dim=1)
+                    auroc_metric.update(probs, cond.to(self.device))
+
+            if auroc_metric is not None:
+                try:
+                    auc = auroc_metric.compute() 
+                    auc_val = float(auc.detach().cpu().item())
+                except Exception as e:
+                    print("AUROC compute failed:", e)
+                    auc_val = float('nan')
+                valid_metrics.update(auc=auc_val)
 
         return valid_metrics.mean_return()
 
@@ -820,6 +847,12 @@ class TrainCRCFoldLoop:
         # self.ema_model.eval()
         self.model.eval()
         with torch.no_grad():
+            if "auc" in legend:
+                auroc_metric = AUROC(task='multiclass', num_classes=self.num_classes, average='macro').to(self.device)
+                auroc_metric.reset()
+            else:
+                auroc_metric = None
+            
             for batch, cond in self.val_dl:
                 batch, cond = move2device(self.device, batch, cond)
     
@@ -859,12 +892,6 @@ class TrainCRCFoldLoop:
                 else:
                     f1_val = None
     
-                if "auc" in legend:
-                    auc = compute_auc_roc(logits, cond, self.device, self.num_classes)
-                    auc_val = float(auc.detach().cpu().item()) if isinstance(auc, torch.Tensor) else float(auc)
-                else:
-                    auc_val = None
-    
                 if "confusion_matrix" in legend:
                     cm = compute_confusion_matrix(logits, cond, self.device, self.num_classes)
                     if isinstance(cm, torch.Tensor):
@@ -880,8 +907,22 @@ class TrainCRCFoldLoop:
                     recall=recall_val,
                     f1=f1_val,
                     confusion_matrix=cm_val,
-                    auc=auc_val
+                    auc=None
                 )
+
+                if auroc_metric is not None:
+                    probs = F.softmax(logits, dim=1)
+                    auroc_metric.update(probs, cond.to(self.device))
+
+            if auroc_metric is not None:
+                try:
+                    auc = auroc_metric.compute() 
+                    auc_val = float(auc.detach().cpu().item())
+                except Exception as e:
+                    print("AUROC compute failed:", e)
+                    auc_val = float('nan')
+                valid_metrics.update(auc=auc_val)
+                
         return valid_metrics.mean_return()
 
     def run_loop(self):
