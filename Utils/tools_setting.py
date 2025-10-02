@@ -9,7 +9,8 @@ from Utils.tools import *
 from Models import (MobileNetV1,
                     ResNet50FiLM,
                     ResNet50,
-                    CRCNet)
+                    CRCNet,
+                    VGG)
 
 def get_optimizer(name,
                   model_params,
@@ -226,6 +227,18 @@ def get_model(name,
     elif name == 'resnet50film':
         return ResNet50FiLM.ResNet50FiLM(num_classes=kwargs.get('num_classes', 3))
 
+    elif name == 'vgg16':
+        return VGG.vgg16_bn(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'vgg19':
+        return VGG.vgg19_bn(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'vgg13':
+        return VGG.vgg13_bn(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+
+    elif name == 'vgg11':
+        return VGG.vgg11_bn(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+    
     elif name == 'crcnet':
         return CRCNet.CRCnet(
             image_size=kwargs.get('image_size', 224),
