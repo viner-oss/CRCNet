@@ -26,33 +26,39 @@ def create_argparser(current_time):
         Ks=10,
         ds_name='mri',
         tf_type='strong',
-        data_dir=r'data/MRI/Images',
-        mapping_file_pth=r'data/MRI/fname2label.csv',
-        Ts=300_000,
-        warmup_T=30_000,
+        data_dir=r'data/Images',
+        mapping_file_pth=r'data/fname2label.csv',
+        Ts=15_000,
+        warmup_T=1_000,
         root_dir=fr'Result/crcnet/Exp{current_time}',  # Result/mobilenet_v1(resnet50)/Experiment20250824-1024
         save_abs_dir=r'Parameters',
         log_abs_dir=r'LOGs',
         metrics_abs_dir=r'Metrics',
         num_classes=3,
-        batch=64,
-        accumulation_steps=2,
+        batch=8,
+        accumulation_steps=8,
         diffusion_name='linear',
         opt_name='adamw',
         lr_scheduler_name='warmup_cosineannealing',
         criterion_name='jointloss',
         ema_decay=0.9999,
-        log_interval=6,
-        val_interval=10,
+        log_interval=10,
+        val_interval=100,
         device='cuda',
         checkpoint_pth_dict=None,
         use_diffusion=True,
-        use_checkpoint=False,
+        use_checkpoint=True,
         use_timer=True,
         use_earlystopper=True,
         use_logger=True,
         use_ema_model=True
     )
+    ckpt_dict = dict(
+        classifier=r'Result/mobilenet_v1/Exp20251001_2129/Parameters/fold_8.pt',
+        guide=r'Result/resnet50film/Exp20251003_1342/Parameters/fold_8.pt',
+        crcnet=None
+    )
+    
     diffusion_config = diffusion_default()
 
     model_name_config = dict(
@@ -60,14 +66,19 @@ def create_argparser(current_time):
         guide='resnet50film',
         crcnet='crcnet'
     )
-    model_config = crcnet_default().update(logits_default('mobilenet_v1'), logits_default('resnet50film'))
+    model_config = crcnet_default()
+    model_config.update(logits_default('mobilenet_v1'))
+    model_config.update(logits_default('resnet50film'))
     opt_config = opt_dict_default()
     lr_config = lr_dict_default()
     criterion_config = criterion_dict_default()
     defaults.update(
         diffusion_dict=diffusion_config, model_dict=model_config, model_name_dict=model_name_config,
-        opt_dict=opt_config, lr_dict=lr_config, criterion_dict=criterion_config
+        opt_dict=opt_config, lr_dict=lr_config, criterion_dict=criterion_config, checkpoint_pth_dict=ckpt_dict
     )
     parser = argparse.ArgumentParser()
     add_dict_to_argparser(parser, defaults)
     return parser, defaults
+
+if __name__ == "__main__":
+    main()
