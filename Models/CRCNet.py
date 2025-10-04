@@ -536,6 +536,8 @@ class Unet(nn.Module):
             zero_module(nn.Conv2d(input_ch, out_chs, 3, padding=1)),
         )
 
+        self.t_pos_emb = SinusoidalPosEmb(self.base_chs)
+
     def forward(
             self,
             x: torch.Tensor,
@@ -552,8 +554,8 @@ class Unet(nn.Module):
         hs = []
         latent_feats = []
 
-        get_t_eb = SinusoidalPosEmb(self.base_chs)
-        t_eb = get_t_eb(t_idx)
+        
+        t_eb = self.t_pos_emb(t_idx)
         low_eb = F.adaptive_avg_pool2d(low_semantic, 1).view(low_semantic.shape[0], low_semantic.shape[1])
         high_eb = F.adaptive_avg_pool2d(high_semantic, 1).view(high_semantic.shape[0], high_semantic.shape[1])
 
@@ -620,7 +622,7 @@ class DetectHead(nn.Module):
         out_chs = max(1024, base_chs * ch_mult[-1])
         assert len(resolution) == n_head, "num of head must be equal to len(resolution)"
 
-        self.fe = []
+        self.fe = nn.ModuleList()
         for n in range(n_head):
             layers = []
             in_chs = base_chs * ch_mult[n]
@@ -666,7 +668,7 @@ class DetectHead(nn.Module):
         :return: a 2-D [B, NUM_CLASSES] of Tensor
         """
         assert len(self.fe) == self.n_head, "len of feature extracor must correspond to num head"
-
+     
         x1 = self.fe[0](x1)
         x2 = self.fe[1](x2)
         x3 = self.fe[2](x3)
@@ -771,45 +773,47 @@ class CRCnet(nn.Module):
                 high_semantic: torch.Tensor):
         pred, latent_feats = self.backbone(x, t_idx, low_semantic, high_semantic)
         x1, x2, x3 = latent_feats
+        
         logits = self.output(x3, x2, x1)
         return logits, pred
 
 if __name__ == "__main__":
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    x = torch.randn(size=[4, 1, 224, 224], dtype=torch.float32, device=device)
-    low_semantic = torch.randn(size=[4, 256, 56, 56], dtype=torch.float32, device=device)
-    high_semantic = torch.randn(size=[4, 2048, 1, 1], dtype=torch.float32, device=device)
+    # x = torch.randn(size=[4, 1, 224, 224], dtype=torch.float32, device=device)
+    # low_semantic = torch.randn(size=[4, 256, 56, 56], dtype=torch.float32, device=device)
+    # high_semantic = torch.randn(size=[4, 2048, 1, 1], dtype=torch.float32, device=device)
 
-    t_idx = torch.randint(0, 1_000, size=[x.shape[0], ])
-    model = CRCnet(
-       image_size=224,
-        init_ch=1,
-        unet_base_chs=128,
-        out_chs=1,
-        unet_ch_mult=[1, 1, 2, 2, 4, 4],
-        low_in_chs=256,
-        high_in_chs=2048,
-        attn_resolution=[],
-        num_res_block=2,
-        num_attn_heads=8,
-        num_attn_head_chs=-1,
-        num_heads_upsample=-1,
-        conv_resample=True,
-        use_fp16=False,
-        use_scale_shift_norm=True,
-        use_resblock_updown=True,
-        use_new_attn_order=False,
-        detect_base_chs=128,
-        detect_ch_mult=[1, 2, 4],
-        num_classes=3,
-        num_cbr=5,
-        detect_resolution=[112, 28, 7],
-        num_detect_head=3,
-        dropout=0.0,
-        norm='bn',
-        act='relu'
-    )
-    out = model(x, t_idx, low_semantic, high_semantic)
-    print(out.shape)
-    print(model)
+    # t_idx = torch.randint(0, 1_000, size=[x.shape[0], ])
+    # model = CRCnet(
+    #    image_size=224,
+    #     init_ch=1,
+    #     unet_base_chs=128,
+    #     out_chs=1,
+    #     unet_ch_mult=[1, 1, 2, 2, 4, 4],
+    #     low_in_chs=256,
+    #     high_in_chs=2048,
+    #     attn_resolution=[],
+    #     num_res_block=2,
+    #     num_attn_heads=8,
+    #     num_attn_head_chs=-1,
+    #     num_heads_upsample=-1,
+    #     conv_resample=True,
+    #     use_fp16=False,
+    #     use_scale_shift_norm=True,
+    #     use_resblock_updown=True,
+    #     use_new_attn_order=False,
+    #     detect_base_chs=128,
+    #     detect_ch_mult=[1, 2, 4],
+    #     num_classes=3,
+    #     num_cbr=5,
+    #     detect_resolution=[112, 28, 7],
+    #     num_detect_head=3,
+    #     dropout=0.0,
+    #     norm='bn',
+    #     act='relu'
+    # )
+    # out, _ = model(x, t_idx, low_semantic, high_semantic)
+    # print(out.shape)
+    # print(model)
+    pass
