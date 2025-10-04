@@ -796,13 +796,13 @@ class TrainCRCFoldLoop:
                             DataLoader(self.val_fold_ds, self.batch, False, num_workers=0, pin_memory=False, drop_last=False))
 
     def _load_checkpoints(self):
-        classifier_ckpt_pth = self.checkpoint_pth_dict['classifier']
-        guide_ckpt_pth = self.checkpoint_pth_dict['guide']
+        classifier_ckpt_pth = self.checkpoint_pth_dict[self.fold]['classifier']
+        guide_ckpt_pth = self.checkpoint_pth_dict[self.fold]['guide']
         
-
+        
         classifier_ckpt = torch.load(classifier_ckpt_pth, map_location=self.device)
         guide_ckpt = torch.load(guide_ckpt_pth, map_location=self.device)
-        
+        self.logger.log_user_info(f"classifier_ckpt_pth: {classifier_ckpt_pth}", f"guide_ckpt_pth: {guide_ckpt_pth}")
 
         self.models['classifier'].load_state_dict(classifier_ckpt['model'])
         self.models['guide'].load_state_dict(guide_ckpt['model'])
