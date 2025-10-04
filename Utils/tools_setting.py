@@ -4,7 +4,7 @@ import torch.optim.lr_scheduler
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from Models.diffusion import get_named_beta_schedule, GaussianDiffusion
-from Models.losses import JointLoss, cross_entropy_loss
+from Models.losses import jointloss, cross_entropy_loss
 from Utils.tools import *
 from Models import (MobileNetV1,
                     ResNet50FiLM,
@@ -132,11 +132,11 @@ def get_criterion(name,
     elif name == 'mse':
         return nn.MSELoss()
     elif name == 'jointloss':
-        return JointLoss(
-            kwargs.get('coef1', 0.8),
-            kwargs.get('coef2', 0.2),
-            kwargs.get('proportions'),
-            kwargs.get('device', 'cuda')
+        return jointloss(
+            coef1=kwargs.get('coef1', 0.8),
+            coef2=kwargs.get('coef2', 0.2),
+            proportions=kwargs.get('proportions'),
+            device=kwargs.get('device', 'cuda')
         )
     else:
         raise ValueError(f"Unknown Module {name}")
@@ -241,28 +241,28 @@ def get_model(name,
         return VGG.vgg11_bn(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b0':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b0'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b1':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b1'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b2':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b2'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b3':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b3'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b4':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b4'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b5':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b5'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b6':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b6'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
 
     elif name == 'efficientnet_b7':
-        return EfficientNet.efficientnet_factory(in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
+        return EfficientNet.efficientnet_factory(variant=kwargs.get('model_name', 'efficientnet_b7'), in_channels=kwargs.get('init_chs', 1), num_classes=kwargs.get('num_classes', 3))
     
     elif name == 'crcnet':
         return CRCNet.CRCnet(
