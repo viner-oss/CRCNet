@@ -48,7 +48,7 @@ def get_activation(name: Optional[str],
         return nn.LeakyReLU(negative_slope=kwargs.get('negative_slope', 0.01),
                             inplace=kwargs.get('inplace', True))
     elif name == 'silu':
-        return nn.SiLU(inplace=kwargs.get('inplace', True))
+        return nn.SiLU(inplace=kwargs.get('inplace', False))
     elif name == 'gelu':
         return nn.GELU()
     elif name == 'none':
