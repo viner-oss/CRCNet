@@ -132,6 +132,7 @@ class RoIDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path, label = self.samples[idx]
+        label = int(label)
         image = Image.open(img_path)
         if self.transforms is not None:
             image = self.transforms(image)
@@ -157,11 +158,20 @@ class SubDataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, idx):
-        img, label = self.base[self.indices[idx]]
-        if self.transforms:
-            img = self.transforms(img)
+        if len(self.base[0]) == 2:
+            img, label = self.base[self.indices[idx]]
+            if self.transforms:
+                img = self.transforms(img)
 
-        return img, label
+        elif len(self.base[0]) == 3:
+            img, roi, label = self.base[self.indices[idx]]
+            if self.transforms:
+                img = self.transforms(img)
+                roi = self.transforms(roi)
+
+            
+
+        return img, roi, label
 
 
 if __name__ == '__main__':
