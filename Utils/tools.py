@@ -256,7 +256,10 @@ def get_fold_data(K: int,
     fold = []
     assert hasattr(dataset, "__getitem__"), "expect input has attr of __getitem__"
     N = len(dataset)
-    labels = np.array([dataset[i][1] for i in range(N)])
+    if len(dataset[0]) == 2:
+        labels = np.array([dataset[i][1] for i in range(N)])
+    elif len(dataset[0]) == 3:
+        labels = np.array([dataset[i][2] for i in range(N)])
     skf = StratifiedKFold(n_splits=K, shuffle=True, random_state=42)
     for fold_idx, (train_idx, val_idx) in enumerate(skf.split(np.arange(N), labels), 1):
         train_ds = SubDataset(dataset, train_idx, train_transforms)
