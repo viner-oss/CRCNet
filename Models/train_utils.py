@@ -3,6 +3,7 @@ import os.path
 import os
 from torch.utils.data import DataLoader
 from Models.logger import Logger, LogVisualizer
+from Models.debug import *
 from Utils.tools_setting import *
 from Utils.tools import *
 from Utils.evaluator import *
@@ -791,22 +792,25 @@ class TrainCRCFoldLoop:
 
     def _load_data(self):
         self.train_fold_ds, self.val_fold_ds = self.ds_list[self.fold][0], self.ds_list[self.fold][1]
-        self.train_dl, self.val_dl = (DataLoader(self.train_fold_ds, self.batch, True, num_workers=4, pin_memory=True, drop_last=False),
-                            DataLoader(self.val_fold_ds, self.batch, False, num_workers=4, pin_memory=True, drop_last=False))
+        self.train_dl, self.val_dl = (DataLoader(self.train_fold_ds, self.batch, True, num_workers=0, pin_memory=False, drop_last=False),
+                            DataLoader(self.val_fold_ds, self.batch, False, num_workers=0, pin_memory=False, drop_last=False))
 
     def _load_checkpoints(self):
         classifier_ckpt_pth = self.checkpoint_pth_dict['classifier']
         guide_ckpt_pth = self.checkpoint_pth_dict['guide']
-        crc_ckpt_pth = self.checkpoint_pth_dict['crcnet']
+        
 
         classifier_ckpt = torch.load(classifier_ckpt_pth, map_location=self.device)
         guide_ckpt = torch.load(guide_ckpt_pth, map_location=self.device)
-        crc_ckpt = torch.load(crc_ckpt_pth, map_location=self.device)
+        
 
         self.models['classifier'].load_state_dict(classifier_ckpt['model'])
         self.models['guide'].load_state_dict(guide_ckpt['model'])
 
         if self.checkpoint_pth_dict['crcnet'] is not None:
+            crc_ckpt_pth = self.checkpoint_pth_dict['crcnet']
+            crc_ckpt = torch.load(crc_ckpt_pth, map_location=self.device)
+            
             self.models['crcnet'].load_state_dict(crc_ckpt['model'])
             self.opt.load_state_dict(crc_ckpt['optimizer'])
             self.step = crc_ckpt['step']
@@ -828,13 +832,13 @@ class TrainCRCFoldLoop:
 
     def _obtain_semantic_feats(self, batch, t_idx=None, target_layers=None, target_layer=None):
         if t_idx is None:
-            act_extractor = ActivationExtractor(self.models['classifier'], layer_names=target_layers)
+            act_extractor = self.act_extract_classifier
             with torch.no_grad():
                 _ = self.models['classifier'](batch)
             out = act_extractor.get(target_layer)
             return out
         else:
-            act_extractor = ActivationExtractor(self.models['guide'], layer_names=target_layers)
+            act_extractor = self.act_extract_guide
             with torch.no_grad():
                 _ = self.models['guide'](batch, t_idx)
             out = act_extractor.get(target_layer)
@@ -964,6 +968,9 @@ class TrainCRCFoldLoop:
             self.device, self.models['classifier'], self.models['guide'], self.models['crcnet'] , self.ema_model
         )
 
+        self.act_extract_classifier = ActivationExtractor(self.models['classifier'], layer_names=['feats.5.block.2'])
+        self.act_extract_guide = ActivationExtractor(self.models['guide'], layer_names=['avgpool'])
+        
         train_iter = iter(self.train_dl)
 
         while (
@@ -993,7 +1000,9 @@ class TrainCRCFoldLoop:
             self.step += 1
 
             loss = self.criterion_dict['coef1'] * self.criterion['ce'](logits, cond) + self.criterion_dict['coef2'] * self.criterion['mse'](eps, r_noise)
-            running_loss += loss
+            loss_value = float(loss.detach().cpu().item())
+            
+            running_loss += loss_value
             loss /= self.accumulation_steps
 
             loss.backward()
@@ -1019,6 +1028,12 @@ class TrainCRCFoldLoop:
 
                 self.early_stopper(val_metrics["val_loss"])
 
+            if self.step % 20 == 0:
+                print_mem_debug(self.step)
+                
+
+        self.act_extract_classifier.remove()
+        self.act_extract_guide.remove()
         self._save_checkpoint()
         visualizer = LogVisualizer(self.logger.history, (3.5, 2.5))
         visualizer.plot_loss('train', os.path.join(self.metrics_pth, '_train.png'))
@@ -1228,6 +1243,8 @@ def warp_hyperparameters(base, override=True, *dicts, **kwargs):
             out[k] = v
 
     return out
+
+
 
 
 
