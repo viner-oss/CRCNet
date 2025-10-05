@@ -83,12 +83,13 @@ class BottleneckFiLM(nn.Module):
         return out
 
 class ResNet50FiLM(nn.Module):
-    def __init__(self, num_classes, time_embed_dim=256, zero_init_residual=False):
+    def __init__(self, num_classes, time_embed_dim=256, zero_init_residual=False, use_extract: bool = False):
         """
         num_classes: classifier classes
         time_embed_dim: dimension of time embedding (sinusoidal -> MLP -> time_emb)
         """
         super().__init__()
+        self.use_extract = use_extract
         self.inplanes = 64
         self.time_embed_dim = time_embed_dim
 
@@ -206,8 +207,11 @@ class ResNet50FiLM(nn.Module):
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
-        logits = self.fc(x)
-        return logits
+        if self.use_extract:
+            return x
+        if not self.use_extract:
+            logits = self.fc(x)
+            return logits
 
 if __name__ == "__main__":
     import torch
