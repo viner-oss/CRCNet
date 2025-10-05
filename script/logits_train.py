@@ -41,7 +41,7 @@ def create_argparser(current_time):
         model_name = 'mobilenet_v1',
         opt_name = 'adamw',
         lr_scheduler_name = 'warmup_cosineannealing',
-        criterion_name = 'corss_entropy',
+        criterion_name = 'cross_entropy',
         ema_decay = 0.9999,
         log_interval = 6,
         val_interval = 10,
@@ -69,4 +69,5 @@ def create_argparser(current_time):
     return parser, defaults
 
 if __name__ == "__main__":
+
     main()
