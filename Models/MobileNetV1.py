@@ -37,8 +37,10 @@ class MobileNetV1(nn.Module):
                  dropout: float = 0.2,
                  use_bias: Optional[bool] = False,
                  num_groups: int = 32,
+                 use_extract: bool = False,
                  **kwargs):
         super(MobileNetV1, self).__init__()
+        self.use_extract = use_extract
 
         def c(chs: int) -> int:
             return max(8, int(chs * width_mult))
@@ -80,15 +82,20 @@ class MobileNetV1(nn.Module):
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
-        x = self.dropout(x)
-        out = self.fc(x)
-        return out
+        if self.use_extract:
+            return x
+
+        if not self.use_extract:
+            x = self.dropout(x)
+            out = self.fc(x)
+            return out
 
 if __name__ == '__main__':
-    x = torch.randn(size=[4, 1, 224, 224])
-    model = MobileNetV1()
-    print(model(x).shape)
-    print(model)
+    # x = torch.randn(size=[4, 1, 224, 224])
+    # model = MobileNetV1()
+    # print(model(x).shape)
+    # print(model)
+    pass
 
 
 
