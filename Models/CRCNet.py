@@ -2,7 +2,8 @@ import math
 from typing import Optional
 from abc import abstractmethod
 import numpy as np
-
+from Models.ResNet50FiLM import *
+from Models.MobileNetV1 import *
 from .factory import *
 import torch.nn.functional as F
 import torch
@@ -26,7 +27,6 @@ class SinusoidalPosEmb(nn.Module):
         return torch.cat([x.sin(), x.cos()], dim=-1)
 
 class TimeRoIBlock(nn.Module):
-
     @abstractmethod
     def forward(self, x, t_emb, low_emb, high_emb):
         """
@@ -556,8 +556,14 @@ class Unet(nn.Module):
 
         
         t_eb = self.t_pos_emb(t_idx)
-        low_eb = F.adaptive_avg_pool2d(low_semantic, 1).view(low_semantic.shape[0], low_semantic.shape[1])
-        high_eb = F.adaptive_avg_pool2d(high_semantic, 1).view(high_semantic.shape[0], high_semantic.shape[1])
+        if len(low_semantic.shape) == 2:
+            low_eb = low_semantic
+        else:
+            low_eb = F.adaptive_avg_pool2d(low_semantic, 1).view(low_semantic.shape[0], low_semantic.shape[1])
+        if len(high_semantic.shape) == 2:
+            high_eb = high_semantic
+        else:
+            high_eb = F.adaptive_avg_pool2d(high_semantic, 1).view(high_semantic.shape[0], high_semantic.shape[1])
 
         t_emb = self.time_mlp(t_eb)
         low_emb = self.low_mlp(low_eb)
@@ -730,6 +736,9 @@ class CRCnet(nn.Module):
             **kwargs
     ):
         super().__init__()
+        self.loc_extract = MobileNetV1(use_extract=True, norm='gn')
+        self.glo_extract = ResNet50FiLM(num_classes=num_classes, use_extract=True)
+        
         self.backbone = Unet(
             image_size,
             num_classes,
@@ -769,9 +778,12 @@ class CRCnet(nn.Module):
     def forward(self,
                 x: torch.Tensor,
                 t_idx: torch.Tensor,
-                low_semantic: torch.Tensor,
-                high_semantic: torch.Tensor):
-        pred, latent_feats = self.backbone(x, t_idx, low_semantic, high_semantic)
+                rois: torch.Tensor):
+        loc_feats = self.loc_extract(rois)
+        glo_feats = self.glo_extract(x, t_idx)
+        
+        pred, latent_feats = self.backbone(x, t_idx, loc_feats, glo_feats)
+        
         x1, x2, x3 = latent_feats
         
         logits = self.output(x3, x2, x1)
