@@ -50,7 +50,7 @@ def crcnet_default():
     include unet default and detect_head default
     """
     base_config = dict(
-        norm = 'bn',
+        norm = 'gn',
         act = 'relu',
         dropout = 0.0,
     )
@@ -61,7 +61,7 @@ def crcnet_default():
         unet_base_chs = 128,
         out_chs = 1,
         unet_ch_mult = (1, 1, 2, 2, 4, 4),
-        low_in_chs = 256,
+        low_in_chs = 1024,
         high_in_chs = 2048,
         attn_resolution = [],
         num_res_block = 2,
@@ -103,13 +103,13 @@ def lr_dict_default():
 def opt_dict_default():
     return dict(
         momentum=0.9,
-        weight_decay=1e-4
+        weight_decay=5e-4
     )
 
 def criterion_dict_default():
     return dict(
-        coef1 = 0.8,
-        coef2 = 0.2
+        coef1 = 0.5,
+        coef2 = 0.5
     )
 
 def add_dict_to_argparser(parser, default_dict):
@@ -159,4 +159,3 @@ def _load_state_dict(
             print(f"  missing_keys: {missing}")
             print(f"  unexpected_keys: {unexpected}")
     return model
-
