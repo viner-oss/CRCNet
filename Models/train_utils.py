@@ -750,8 +750,10 @@ class TrainCRCFoldLoop:
     def _init_model(self):
         self.models = {}
         for key, value in self.model_name_dict.items():
-            self.models[key] = get_model(value, **self.model_dict)
-
+            if key == 'crcnet':
+                self.models[key] = get_model(value, **self.model_dict)
+                break
+                
     def _init_opt(self):
         self.opt_dict.update(lr=self.lr)
         self.opt = get_optimizer(
@@ -802,13 +804,15 @@ class TrainCRCFoldLoop:
         
         classifier_ckpt = torch.load(classifier_ckpt_pth, map_location=self.device)
         guide_ckpt = torch.load(guide_ckpt_pth, map_location=self.device)
-        self.logger.log_user_info(f"classifier_ckpt_pth: {classifier_ckpt_pth}", f"guide_ckpt_pth: {guide_ckpt_pth}")
+        
+        print(f"classifier_ckpt_pth: {classifier_ckpt_pth}") 
+        print(f"guide_ckpt_pth: {guide_ckpt_pth}")
 
         self.models['classifier'].load_state_dict(classifier_ckpt['model'])
         self.models['guide'].load_state_dict(guide_ckpt['model'])
 
-        if self.checkpoint_pth_dict['crcnet'] is not None:
-            crc_ckpt_pth = self.checkpoint_pth_dict['crcnet']
+        if self.checkpoint_pth_dict[self.fold]['crcnet'] is not None:
+            crc_ckpt_pth = self.checkpoint_pth_dict[self.fold]['crcnet']
             crc_ckpt = torch.load(crc_ckpt_pth, map_location=self.device)
             
             self.models['crcnet'].load_state_dict(crc_ckpt['model'])
@@ -863,12 +867,8 @@ class TrainCRCFoldLoop:
     
                 t_idx = torch.randint(0, 50, size=[batch.shape[0], ], device=batch.device)
                 xt, r_noise = self.diffusion.q_sample(batch, t_idx)
-                low_semantic = self._obtain_semantic_feats(rois, target_layers=['feats.5.block.2'], target_layer='feats.5.block.2').detach()
-                high_semantic = self._obtain_semantic_feats(xt, t_idx, target_layers=['avgpool'], target_layer='avgpool').detach()
-
-                low_semantic, high_semantic = move2device(self.device, low_semantic, high_semantic)
                 
-                logits, eps = self.models['crcnet'](xt, t_idx, low_semantic, high_semantic)
+                logits, eps = self.models['crcnet'](xt, t_idx, rois)
     
                 if "val_loss" in legend:
                     loss = self.criterion_dict['coef1'] * self.criterion['ce'](logits, cond) + self.criterion_dict['coef2'] * self.criterion['mse'](eps, r_noise)
@@ -964,12 +964,12 @@ class TrainCRCFoldLoop:
         
         running_loss = 0.
         self.opt.zero_grad()
-        self.models['classifier'], self.models['guide'], self.models['crcnet'], self.ema_model = move2device(
-            self.device, self.models['classifier'], self.models['guide'], self.models['crcnet'] , self.ema_model
+        self.models['crcnet'], self.ema_model = move2device(
+            self.device, self.models['crcnet'] , self.ema_model
         )
 
-        self.act_extract_classifier = ActivationExtractor(self.models['classifier'], layer_names=['feats.5.block.2'])
-        self.act_extract_guide = ActivationExtractor(self.models['guide'], layer_names=['avgpool'])
+        # self.act_extract_classifier = ActivationExtractor(self.models['classifier'], layer_names=['feats.5.block.2'])
+        # self.act_extract_guide = ActivationExtractor(self.models['guide'], layer_names=['avgpool'])
         
         train_iter = iter(self.train_dl)
 
@@ -990,13 +990,8 @@ class TrainCRCFoldLoop:
 
             t_idx = torch.randint(0, 50, size=[batch.shape[0], ], device=batch.device)
             xt, r_noise = self.diffusion.q_sample(batch, t_idx)
-
-            low_semantic = self._obtain_semantic_feats(rois, target_layers=['feats.5.block.2'], target_layer='feats.5.block.2').detach()
-            high_semantic = self._obtain_semantic_feats(xt, t_idx, target_layers=['avgpool'], target_layer='avgpool').detach()
-
-            low_semantic, high_semantic = move2device(self.device, low_semantic, high_semantic)
-
-            logits, eps = self.models['crcnet'](xt, t_idx, low_semantic, high_semantic)
+            
+            logits, eps = self.models['crcnet'](xt, t_idx, rois)
             self.step += 1
 
             loss = self.criterion_dict['coef1'] * self.criterion['ce'](logits, cond) + self.criterion_dict['coef2'] * self.criterion['mse'](eps, r_noise)
@@ -1030,10 +1025,10 @@ class TrainCRCFoldLoop:
 
             if self.step % 20 == 0:
                 print_mem_debug(self.step)
-                
+                print()
 
-        self.act_extract_classifier.remove()
-        self.act_extract_guide.remove()
+        # self.act_extract_classifier.remove()
+        # self.act_extract_guide.remove()
         self._save_checkpoint()
         visualizer = LogVisualizer(self.logger.history, (3.5, 2.5))
         visualizer.plot_loss('train', os.path.join(self.metrics_pth, '_train.png'))
@@ -1090,6 +1085,7 @@ class TrainCRCKsLoop:
     
     def execute(self):
         for fold in range(self.Ks):
+            print(f"***========== Fold {fold+1} ==========***")
             TrainCRCFoldLoop(
                 self.Ts,
                 self.warmup_T,
