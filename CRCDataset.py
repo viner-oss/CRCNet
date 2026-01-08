@@ -146,10 +146,7 @@ class RoIDataset(Dataset):
         return proportions
 
 class SubDataset(Dataset):
-    def __init__(self,
-                 base_dataset,
-                 indices,
-                 transforms):
+    def __init__(self, base_dataset, indices, transforms):
         self.base = base_dataset
         self.indices = indices
         self.transforms = transforms
@@ -158,20 +155,30 @@ class SubDataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, idx):
-        if len(self.base[0]) == 2:
-            img, label = self.base[self.indices[idx]]
+        # 映射回原始 dataset 的真实索引
+        real_idx = self.indices[idx]
+        
+        # 获取原始数据
+        # 假设 base_dataset[real_idx] 返回的是 (img, lesion, label) 或 (img, label)
+        data = self.base[real_idx]
+        
+        # 根据返回值的数量分别处理 transform
+        if len(data) == 3: # (img, lesion, label)
+            img, lesion, label = data
             if self.transforms:
                 img = self.transforms(img)
-
-        elif len(self.base[0]) == 3:
-            img, roi, label = self.base[self.indices[idx]]
-            if self.transforms:
-                img = self.transforms(img)
-                roi = self.transforms(roi)
-
+                lesion = self.transforms(lesion) # 注意：如果是分割任务，lesion可能需要不同的transform
+            return img, lesion, label
             
+        elif len(data) == 2: # (img, label)
+            img, label = data
+            if self.transforms:
+                img = self.transforms(img)
+            return img, label
+        
+        else:
+            return data
 
-        return img, roi, label
 
 
 if __name__ == '__main__':
