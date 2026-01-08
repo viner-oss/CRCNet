@@ -245,26 +245,47 @@ class PlotBoard:
 def get_fold_data(K: int,
                   train_transforms,
                   val_transforms,
-                  dataset) -> list:
+                  dataset,
+                  csv_path: str = r'data/MRI/fname2label.csv') -> list:
     """
-    get K_fold data list
-    :return: fold [[train_ds, val_ds] ---> fold: 1,
-                   [train_ds, val_ds] ---> fold: 2,
-                   [train_ds, val_ds] ---> fold: 3
-                               ...                ]
+    :param K: 折数 (建议设为 5)
+    :param train_transforms: 训练集增强
+    :param val_transforms: 验证集预处理
+    :param dataset: 原始完整数据集 (MRIDataset 或 RawDataset)
+    :param csv_path: 包含 fname, patient, label 的 csv 文件路径
+    :return: list of (train_ds, val_ds) tuples
     """
     fold = []
-    assert hasattr(dataset, "__getitem__"), "expect input has attr of __getitem__"
-    N = len(dataset)
-    if len(dataset[0]) == 2:
-        labels = np.array([dataset[i][1] for i in range(N)])
-    elif len(dataset[0]) == 3:
-        labels = np.array([dataset[i][2] for i in range(N)])
-    skf = StratifiedKFold(n_splits=K, shuffle=True, random_state=42)
-    for fold_idx, (train_idx, val_idx) in enumerate(skf.split(np.arange(N), labels), 1):
+    df = pd.read_csv(csv_path)
+    if len(df) != len(dataset):
+        print(f"[警告] CSV行数 ({len(df)}) 与 Dataset长度 ({len(dataset)}) 不匹配！")
+        print("请检查 dataset 是否过滤了某些图片，或者 CSV 是否有表头。")
+
+    X = np.arange(len(dataset)) 
+    y = df['label'].values 
+    groups = df['patient'].values 
+
+    sgkf = StratifiedGroupKFold(n_splits=K, shuffle=True, random_state=42)
+
+    print(f"正在进行 {K} 折交叉验证划分 (按病人分组 StratifiedGroupKFold)...")
+
+    for fold_idx, (train_idx, val_idx) in enumerate(sgkf.split(X, y, groups=groups), 1):
+        
+        train_patients = set(groups[train_idx])
+        val_patients = set(groups[val_idx])
+        intersection = train_patients.intersection(val_patients)
+        if intersection:
+            raise ValueError(f"严重错误！发现数据泄露，病人 {intersection} 同时出现在训练集和验证集！")
+        
+        print(f"Fold {fold_idx}:")
+        print(f"  - 训练集: {len(train_idx)} 张图片, 包含 {len(train_patients)} 位病人")
+        print(f"  - 验证集: {len(val_idx)} 张图片, 包含 {len(val_patients)} 位病人")
+
         train_ds = SubDataset(dataset, train_idx, train_transforms)
         val_ds = SubDataset(dataset, val_idx, val_transforms)
+        
         fold.append((train_ds, val_ds))
+
     return fold
 
 import torch
@@ -312,3 +333,4 @@ def is_image_pth(pth):
         return False
     clean = pth.split('?', 1)[0].split('#', 1)[0].lower()
     return clean.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tif', '.webp'))
+
